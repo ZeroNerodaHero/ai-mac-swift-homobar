@@ -1,18 +1,71 @@
-# ai-mac-swift-homobar
+# Job menu bar
 
-A macOS menu bar item that shows what jobs are running: Cursor cloud agents and open PRs on `ZeroNerodaHero/slop-stream-architecture`. It's a [SwiftBar](https://github.com/swiftbar/SwiftBar) plugin that refreshes every 30 seconds (the `30s` in the filename sets that).
+Shows Billy's Cursor cloud agents (running, failed, done) and open PRs on
+`ZeroNerodaHero/slop-stream-architecture` in the macOS menu bar. Two options:
 
-## What it shows
-- Menu bar: `⚙ N · PR M` while agents run, `✓` when idle (red if a recent run failed), `⚙ ?` when no API key, `⚙ !` if the API errors.
-- Dropdown: running agents with age and links, agents that ended in the last 6h, open PRs, Refresh now.
-- One macOS notification when the running count drops to 0.
+| | SwiftBar plugin (`jobs.30s.py`) | Native app (`Jobbar.app`) |
+|---|---|---|
+| UI | Plain dropdown menu | Scrollable popover, filters (All / Running / Failed / Done / PRs), search |
+| Needs | SwiftBar + Homebrew Python | Nothing at runtime (build needs Xcode / Swift 5.9+) |
+| Refresh | Every 30s | Every 30s, plus refresh button (⌘R) |
 
-## Setup
-1. `brew install --cask swiftbar`, then set SwiftBar's plugin folder to this repo (or copy `jobs.30s.py` into your plugin folder).
-2. Create a Cursor API key at https://cursor.com/dashboard (API Keys).
-3. Store it in Keychain (paste at the prompt, it stays out of shell history):
-   `security add-generic-password -a $USER -s cursor-api-key -w`
-   Or put it in `~/.config/job-menubar/key` with `chmod 600`.
-4. Allow SwiftBar keychain access if asked; turn on "Launch at login" in SwiftBar settings.
+Both share the "failures seen" marker in `~/.config/job-menubar/state.json`, so
+marking failures seen in one clears the red indicator in the other.
 
-Requires `gh` logged in for the PR section. Never commit your key.
+## API key (both)
+
+The Cursor API key (cursor.com/dashboard → API Keys) is read from the macOS Keychain:
+
+```sh
+security add-generic-password -a "$USER" -s cursor-api-key -w   # prompts for the key
+```
+
+Fallback: `~/.config/job-menubar/key` (chmod 600). The key is never printed or logged,
+and must never be committed.
+
+## Menu bar title
+
+- `⚙ N · PR M`: N agents running, M open PRs
+- `✓ · PR M`: nothing running
+- red `✗ K` appended: K failed runs in the last 24h that you haven't marked seen
+- `⚙ ?`: no API key; `⚙ !`: Cursor API error
+
+## Option 1: SwiftBar plugin
+
+`jobs.30s.py` lists v1 agents, keeps ACTIVE ones plus ones updated in the last 24h,
+and reads each one's latest run status. Sections: Running, Failed in last 24h
+(e.g. "failed after 2s"), Ended in last 6h, Open PRs. If a run lookup fails the
+agent shows ⚠️ UNKNOWN instead of being assumed finished. "Mark failures seen" runs
+`jobs.30s.py --mark-seen`.
+
+Install: SwiftBar's plugin folder (`~/Documents/axiom/job-menubar`) holds a symlink to
+this repo's script, so pulling the repo updates the plugin:
+
+```sh
+ln -sf "$PWD/jobs.30s.py" ~/Documents/axiom/job-menubar/jobs.30s.py
+open -g swiftbar://refreshallplugins
+```
+
+(Don't point SwiftBar's plugin folder at the repo itself: SwiftBar would try to run
+`build.sh` as a plugin.)
+
+Testing without the API: `JOBBAR_FIXTURE=/path/to/fixtures ./jobs.30s.py`.
+
+## Option 2: native app (Jobbar)
+
+SwiftUI `MenuBarExtra` app in `MenuBarApp/` (macOS 13+). Click a job to open it on
+cursor.com; the PR button opens its pull request. It sends notifications when all
+running jobs finish and when a new failure appears.
+
+```sh
+./build.sh            # builds build/Jobbar.app (ad-hoc signed, menu bar only, no Dock icon)
+open build/Jobbar.app
+./build.sh --install  # also copies it to ~/Applications
+```
+
+To start it at login: System Settings → General → Login Items → add Jobbar.app.
+Quit from the popover's Quit button (⌘Q).
+
+If you run both the plugin and the app, you get two menu bar items and duplicate
+notifications. Turn off whichever one you don't want (SwiftBar: disable the plugin;
+Jobbar: Quit and remove it from Login Items).

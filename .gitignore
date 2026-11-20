@@ -2,3 +2,8 @@
 __pycache__/
 key
 *.key
+# native app build output
+build/
+MenuBarApp/.build/
+MenuBarApp/.swiftpm/
+*.xcodeproj/
